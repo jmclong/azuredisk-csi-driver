@@ -458,7 +458,7 @@ fi
 
 AZURE_CLUSTER_KUBECONFIG_FILE="$OUTPUT_DIR/kubeconfig/kubeconfig.$AZURE_LOCATION.json"
 
-if [[ -z ${BOOTSTRAP_SCRIPT:-} ]]; then
+if [[ ! -z ${BOOTSTRAP_SCRIPT:-} ]]; then
   if [[ ! -x $BOOTSTRAP_SCRIPT ]]; then
     echo "Unable to execute \"$BOOTSTRAP_SCRIPT\". Check that the file exists and has correct permissions."
     exit 1
