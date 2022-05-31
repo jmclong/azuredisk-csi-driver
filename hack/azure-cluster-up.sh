@@ -134,7 +134,7 @@ unset AZURE_SUBSCRIPTION_ID
 unset AZURE_TENANT_ID
 unset ENABLE_AZURE_BASTION
 unset OUTPUT_DIR
-unset BOOTSTRAP_SCRIPT
+unset BYPASS_CLUSTER_UP_CHECK
 POSITIONAL=()
 
 while [[ $# -gt 0 ]]
@@ -200,11 +200,14 @@ do
       AZURE_K8S_VERSION="$2"
       shift 2 # skip the option arguments
       ;;
-    --bootstrap-script)
-      BOOTSTRAP_SCRIPT="$2"
-      shift 2 # skip the option arguments
+    --bypass-cluster-up-check)
+      BYPASS_CLUSTER_UP_CHECK="true"
+      shift
       ;;
-
+    # --private-cluster)
+    #   PRIVATE_CLUSTER="true"
+    #   shift
+    #   ;;
     -?|--help)
       printhelp
       exit 1
@@ -458,17 +461,10 @@ fi
 
 AZURE_CLUSTER_KUBECONFIG_FILE="$OUTPUT_DIR/kubeconfig/kubeconfig.$AZURE_LOCATION.json"
 
-if [[ ! -z ${BOOTSTRAP_SCRIPT:-} ]]; then
-  if [[ ! -x $BOOTSTRAP_SCRIPT ]]; then
-    echo "Unable to execute \"$BOOTSTRAP_SCRIPT\". Check that the file exists and has correct permissions."
-    exit 1
-  fi
-  $BOOTSTRAP_SCRIPT "$AZURE_RESOURCE_GROUP"
+if [[ -z ${BYPASS_CLUSTER_UP_CHECK:-} ]]; then
+  echo "Waiting for cluster to become available"
+  retry 30 10 kubectl --kubeconfig="$AZURE_CLUSTER_KUBECONFIG_FILE" get nodes 1> /dev/null
 fi
-
-
-echo "Waiting for cluster to become available"
-retry 30 10 kubectl --kubeconfig="$AZURE_CLUSTER_KUBECONFIG_FILE" get nodes 1> /dev/null
 
 #
 # Create setup and clean-up shell scripts.
