@@ -24,10 +24,10 @@ import (
 	"testing"
 
 	"github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
 	"github.com/onsi/gomega"
 	"k8s.io/kubernetes/test/e2e/framework"
 	testconsts "sigs.k8s.io/azuredisk-csi-driver/test/const"
+	"sigs.k8s.io/azuredisk-csi-driver/test/reporters"
 
 	"sigs.k8s.io/azuredisk-csi-driver/test/utils/azure"
 	"sigs.k8s.io/azuredisk-csi-driver/test/utils/credentials"
@@ -139,6 +139,6 @@ func TestScale(t *testing.T) {
 	if reportDir == "" {
 		reportDir = testconsts.DefaultReportDir
 	}
-	r := []ginkgo.Reporter{reporters.NewJUnitReporter(path.Join(reportDir, "JUnit.xml"))}
+	r := []ginkgo.Reporter{reporters.NewJUnitReportWithSuites(path.Join(reportDir, "JUnit.xml"))}
 	ginkgo.RunSpecsWithDefaultAndCustomReporters(t, "AzureDisk CSI Driver Scale Tests", r)
 }
