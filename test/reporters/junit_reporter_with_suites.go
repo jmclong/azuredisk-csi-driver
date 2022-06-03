@@ -73,7 +73,11 @@ func (reporter *JUnitReporterWithSuites) SpecSuiteDidEnd(summary *types.SuiteSum
 		return
 	}
 	defer file.Close()
-	file.WriteString(xml.Header)
+	_, err = file.WriteString(xml.Header)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to write XML header to %q: %v\n", reporter.filename, err)
+		return
+	}
 	encoder := xml.NewEncoder(file)
 	err = encoder.Encode(testsuites)
 	if err != nil {
