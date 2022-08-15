@@ -79,7 +79,7 @@ func isPerfTuningEnabled(profile string) bool {
 // accountSupportsPerfOptimization checks to see if account type supports perf optimization
 func accountSupportsPerfOptimization(accountType string) bool {
 	accountTypeLower := strings.ToLower(accountType)
-	if strings.HasPrefix(accountTypeLower, "premium") || strings.HasPrefix(accountTypeLower, "standardssd") {
+	if !strings.HasPrefix(accountTypeLower, "premiumv2") && (strings.HasPrefix(accountTypeLower, "premium") || strings.HasPrefix(accountTypeLower, "standardssd")) {
 		return true
 	}
 	return false

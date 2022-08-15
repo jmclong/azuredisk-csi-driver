@@ -35,6 +35,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	consts "sigs.k8s.io/azuredisk-csi-driver/pkg/azureconstants"
 	"sigs.k8s.io/azuredisk-csi-driver/test/utils/testutil"
+	azure "sigs.k8s.io/cloud-provider-azure/pkg/provider"
 )
 
 func TestCheckDiskName(t *testing.T) {
@@ -1342,6 +1343,27 @@ func TestNormalizeStorageAccountType(t *testing.T) {
 			storageAccountType:     "UltraSSD_LRS",
 			disableAzureStackCloud: true,
 			expectedAccountType:    compute.DiskStorageAccountTypesUltraSSDLRS,
+			expectError:            false,
+		},
+		{
+			cloud:                  azurePublicCloud,
+			storageAccountType:     "PremiumV2_LRS",
+			disableAzureStackCloud: false,
+			expectedAccountType:    azure.DiskStorageAccountTypesPremiumV2LRS,
+			expectError:            false,
+		},
+		{
+			cloud:                  azureStackCloud,
+			storageAccountType:     "PremiumV2_LRS",
+			disableAzureStackCloud: false,
+			expectedAccountType:    "",
+			expectError:            true,
+		},
+		{
+			cloud:                  azureStackCloud,
+			storageAccountType:     "PremiumV2_LRS",
+			disableAzureStackCloud: true,
+			expectedAccountType:    azure.DiskStorageAccountTypesPremiumV2LRS,
 			expectError:            false,
 		},
 	}

@@ -18,6 +18,9 @@ package optimization
 
 var (
 	DiskSkuMap = map[string]map[string]DiskSkuInfo{
+		"premiumv2_lrs": {
+			"p": DiskSkuInfo{StorageAccountType: "PremiumV2_LRS", StorageTier: "Premium", DiskSize: "P", MaxAllowedShares: 15, MaxBurstIops: 0, MaxIops: 0, MaxBwMbps: 0, MaxBurstBwMbps: 0, MaxSizeGiB: 65536},
+		},
 		"premium_lrs": {
 			"p40": {StorageAccountType: "Premium_LRS", StorageTier: "Premium", DiskSize: "P40", MaxAllowedShares: 5, MaxBurstIops: 7500, MaxIops: 7500, MaxBwMbps: 250, MaxBurstBwMbps: 250, MaxSizeGiB: 2048},
 			"p2":  {StorageAccountType: "Premium_LRS", StorageTier: "Premium", DiskSize: "P2", MaxAllowedShares: 1, MaxBurstIops: 3500, MaxIops: 120, MaxBwMbps: 25, MaxBurstBwMbps: 170, MaxSizeGiB: 8},

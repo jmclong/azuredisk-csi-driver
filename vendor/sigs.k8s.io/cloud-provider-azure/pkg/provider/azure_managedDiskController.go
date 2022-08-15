@@ -37,7 +37,9 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
-//ManagedDiskController : managed disk controller struct
+const DiskStorageAccountTypesPremiumV2LRS = compute.DiskStorageAccountTypes("PremiumV2_LRS")
+
+// ManagedDiskController : managed disk controller struct
 type ManagedDiskController struct {
 	common *controllerCommon
 }
@@ -86,7 +88,7 @@ type ManagedDiskOptions struct {
 	SubscriptionID string
 }
 
-//CreateManagedDisk : create managed disk
+// CreateManagedDisk : create managed disk
 func (c *ManagedDiskController) CreateManagedDisk(ctx context.Context, options *ManagedDiskOptions) (string, error) {
 	var err error
 	klog.V(4).Infof("azureDisk - creating new managed Name:%s StorageAccountType:%s Size:%v", options.DiskName, options.StorageAccountType, options.SizeGB)
@@ -151,8 +153,11 @@ func (c *ManagedDiskController) CreateManagedDisk(ctx context.Context, options *
 		}
 	}
 
-	if diskSku == compute.DiskStorageAccountTypesUltraSSDLRS {
-		diskIOPSReadWrite := int64(consts.DefaultDiskIOPSReadWrite)
+	if diskSku == compute.DiskStorageAccountTypesUltraSSDLRS || diskSku == DiskStorageAccountTypesPremiumV2LRS {
+		diskIOPSReadWrite, diskMBpsReadWrite, err := defaultDiskParameters(diskSku)
+		if err != nil {
+			return "", err
+		}
 		if options.DiskIOPSReadWrite != "" {
 			v, err := strconv.Atoi(options.DiskIOPSReadWrite)
 			if err != nil {
@@ -162,7 +167,6 @@ func (c *ManagedDiskController) CreateManagedDisk(ctx context.Context, options *
 		}
 		diskProperties.DiskIOPSReadWrite = to.Int64Ptr(diskIOPSReadWrite)
 
-		diskMBpsReadWrite := int64(consts.DefaultDiskMBpsReadWrite)
 		if options.DiskMBpsReadWrite != "" {
 			v, err := strconv.Atoi(options.DiskMBpsReadWrite)
 			if err != nil {
@@ -178,13 +182,13 @@ func (c *ManagedDiskController) CreateManagedDisk(ctx context.Context, options *
 		}
 	} else {
 		if options.DiskIOPSReadWrite != "" {
-			return "", fmt.Errorf("AzureDisk - DiskIOPSReadWrite parameter is only applicable in UltraSSD_LRS disk type")
+			return "", fmt.Errorf("AzureDisk - DiskIOPSReadWrite parameter is only applicable in UltraSSD_LRS and PremiumV2_LRS disk types")
 		}
 		if options.DiskMBpsReadWrite != "" {
-			return "", fmt.Errorf("AzureDisk - DiskMBpsReadWrite parameter is only applicable in UltraSSD_LRS disk type")
+			return "", fmt.Errorf("AzureDisk - DiskMBpsReadWrite parameter is only applicable in UltraSSD_LRS and PremiumV2_LRS disk types")
 		}
 		if options.LogicalSectorSize != 0 {
-			return "", fmt.Errorf("AzureDisk - LogicalSectorSize parameter is only applicable in UltraSSD_LRS disk type")
+			return "", fmt.Errorf("AzureDisk - LogicalSectorSize parameter is only applicable in UltraSSD_LRS and PremiumV2_LRS disk types")
 		}
 	}
 
@@ -267,7 +271,18 @@ func (c *ManagedDiskController) CreateManagedDisk(ctx context.Context, options *
 	return diskID, nil
 }
 
-//DeleteManagedDisk : delete managed disk
+func defaultDiskParameters(diskSku compute.DiskStorageAccountTypes) (int64, int64, error) {
+	switch diskSku {
+	case compute.DiskStorageAccountTypesUltraSSDLRS:
+		return int64(consts.DefaultUltraSSDDiskIOPSReadWrite), int64(consts.DefaultUltraSSDDiskMBpsReadWrite), nil
+	case DiskStorageAccountTypesPremiumV2LRS:
+		return int64(consts.DefaultPremiumV2DiskIOPSReadWrite), int64(consts.DefaultPremiumV2DiskMBpsReadWrite), nil
+	default:
+		return 0, 0, fmt.Errorf("azureDisk - no default IOPS or MBps for diskSku: %v", diskSku)
+	}
+}
+
+// DeleteManagedDisk : delete managed disk
 func (c *ManagedDiskController) DeleteManagedDisk(ctx context.Context, diskURI string) error {
 	resourceGroup, subsID, err := getInfoFromDiskURI(diskURI)
 	if err != nil {

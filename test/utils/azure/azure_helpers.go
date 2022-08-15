@@ -30,6 +30,7 @@ import (
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Azure/go-autorest/autorest/to"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider"
 )
 
 type Client struct {
@@ -42,6 +43,7 @@ type Client struct {
 	vnetClient          network.VirtualNetworksClient
 	disksClient         compute.DisksClient
 	sshPublicKeysClient compute.SSHPublicKeysClient
+	skusClient          compute.ResourceSkusClient
 }
 
 func GetAzureClient(cloud, subscriptionID, clientID, tenantID, clientSecret string) (*Client, error) {
@@ -277,6 +279,24 @@ func (az *Client) GetVirtualNetworkSubnet(ctx context.Context, groupName, vnetNa
 	return az.subnetsClient.Get(ctx, groupName, vnetName, subnetName, "")
 }
 
+func (az *Client) GetPremiumV2Support(ctx context.Context, location string) (bool, error) {
+	iter, err := az.skusClient.ListComplete(ctx, location, "")
+	if err != nil {
+		return false, err
+	}
+	for iter.NotDone() {
+		sku := iter.Value()
+		if *sku.ResourceType == "disks" && *sku.Name == string(provider.DiskStorageAccountTypesPremiumV2LRS) {
+			return true, nil
+		}
+		err := iter.NextWithContext(ctx)
+		if err != nil {
+			return false, err
+		}
+	}
+	return false, nil
+}
+
 func getOAuthConfig(env azure.Environment, subscriptionID, tenantID string) (*adal.OAuthConfig, error) {
 	oauthConfig, err := adal.NewOAuthConfig(env.ActiveDirectoryEndpoint, tenantID)
 	if err != nil {
@@ -297,6 +317,7 @@ func getClient(env azure.Environment, subscriptionID, tenantID string, armSpt *a
 		vnetClient:          network.NewVirtualNetworksClientWithBaseURI(env.ResourceManagerEndpoint, subscriptionID),
 		disksClient:         compute.NewDisksClientWithBaseURI(env.ResourceManagerEndpoint, subscriptionID),
 		sshPublicKeysClient: compute.NewSSHPublicKeysClientWithBaseURI(env.ResourceManagerEndpoint, subscriptionID),
+		skusClient:          compute.NewResourceSkusClientWithBaseURI(env.ResourceManagerEndpoint, subscriptionID),
 	}
 
 	authorizer := autorest.NewBearerAuthorizer(armSpt)
@@ -307,6 +328,7 @@ func getClient(env azure.Environment, subscriptionID, tenantID string, armSpt *a
 	c.vnetClient.Authorizer = authorizer
 	c.disksClient.Authorizer = authorizer
 	c.sshPublicKeysClient.Authorizer = authorizer
+	c.skusClient.Authorizer = authorizer
 
 	return c
 }

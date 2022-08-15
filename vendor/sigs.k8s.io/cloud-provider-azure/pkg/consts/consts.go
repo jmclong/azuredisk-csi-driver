@@ -63,11 +63,23 @@ const (
 	// MetadataURL is the metadata service endpoint
 	MetadataURL = "http://169.254.169.254/metadata/instance"
 
-	// DefaultDiskIOPSReadWrite is the default IOPS Caps & Throughput Cap (MBps)
+	// DefaultDiskIOPSReadWrite is the default IOPS Caps & Throughput Cap (MBps) for UltraSSD_LRS
 	// per https://docs.microsoft.com/en-us/azure/virtual-machines/linux/disks-ultra-ssd
 	DefaultDiskIOPSReadWrite = 500
-	// DefaultDiskMBpsReadWrite is the default disk MBps read write
+	// DefaultDiskMBpsReadWrite is the default disk MBps read write for UltraSSD_LRS
 	DefaultDiskMBpsReadWrite = 100
+
+	// DefaultUltraSSDDiskIOPSReadWrite is the default IOPS Caps & Throughput Cap (MBps) for UltraSSD_LRS
+	// per https://docs.microsoft.com/en-us/azure/virtual-machines/linux/disks-ultra-ssd
+	DefaultUltraSSDDiskIOPSReadWrite = DefaultDiskIOPSReadWrite
+	// DefaultUltraSSDDiskMBpsReadWrite is the default disk MBps read write for UltraSSD_LRS
+	DefaultUltraSSDDiskMBpsReadWrite = DefaultDiskMBpsReadWrite
+
+	// DefaultPremiumV2DiskIOPSReadWrite is the default IOPS Caps & Throughput Cap (MBps) for PremiumV2_LRS
+	// per https://docs.microsoft.com/en-us/azure/virtual-machines/disks-deploy-premium-v2
+	DefaultPremiumV2DiskIOPSReadWrite = 3000
+	// DefaultPremiumV2DiskMBpsReadWrite is the default disk MBps read write for PremiumV2_LRS
+	DefaultPremiumV2DiskMBpsReadWrite = 125
 
 	DiskEncryptionSetIDFormat = "/subscriptions/{subs-id}/resourceGroups/{rg-name}/providers/Microsoft.Compute/diskEncryptionSets/{diskEncryptionSet-name}"
 

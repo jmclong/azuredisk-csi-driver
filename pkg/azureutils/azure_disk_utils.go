@@ -500,6 +500,7 @@ func NormalizeStorageAccountType(storageAccountType, cloud string, disableAzureS
 
 	sku := compute.DiskStorageAccountTypes(storageAccountType)
 	supportedSkuNames := compute.PossibleDiskStorageAccountTypesValues()
+	supportedSkuNames = append(supportedSkuNames, azure.DiskStorageAccountTypesPremiumV2LRS)
 	if IsAzureStackCloud(cloud, disableAzureStackCloud) {
 		supportedSkuNames = []compute.DiskStorageAccountTypes{compute.DiskStorageAccountTypesStandardLRS, compute.DiskStorageAccountTypesPremiumLRS}
 	}

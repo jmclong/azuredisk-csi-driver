@@ -219,7 +219,7 @@ func TestGetDefaultDiskIOPSReadWrite(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		result := getDefaultDiskIOPSReadWrite(test.requestGiB)
+		result := getDefaultUltraDiskIOPSReadWrite(test.requestGiB)
 		if result != test.expected {
 			t.Errorf("Unexpected result: %v, expected result: %v, input: %d", result, test.expected, test.requestGiB)
 		}
@@ -254,7 +254,7 @@ func TestGetDefaultDiskMBPSReadWrite(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		result := getDefaultDiskMBPSReadWrite(test.requestGiB)
+		result := getDefaultUltraDiskMBPSReadWrite(test.requestGiB)
 		if result != test.expected {
 			t.Errorf("Unexpected result: %v, expected result: %v, input: %d", result, test.expected, test.requestGiB)
 		}

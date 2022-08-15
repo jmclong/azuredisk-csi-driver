@@ -147,6 +147,40 @@ func (t *dynamicProvisioningTestSuite) defineTests(isMultiZone bool) {
 		test.Run(cs, ns)
 	})
 
+	ginkgo.It("should create a pod with a PremiumV2_LRS volume [kubernetes.io/azure-disk] [disk.csi.azure.com]", func() {
+		if !isMultiZone {
+			ginkgo.Skip("PremiumV2_LRS only supported on zonal VMs.")
+		}
+		skipIfNotSupportPremiumV2()
+		pods := []testsuites.PodDetails{
+			{
+				Cmd: convertToPowershellorCmdCommandIfNecessary("echo 'hello world' > /mnt/test-1/data && grep 'hello world' /mnt/test-1/data"),
+				Volumes: t.normalizeVolumes([]testsuites.VolumeDetails{
+					{
+						ClaimSize: "10Gi",
+						VolumeMount: testsuites.VolumeMountDetails{
+							NameGenerate:      "test-volume-",
+							MountPathGenerate: "/mnt/test-",
+						},
+						VolumeAccessMode: v1.ReadWriteOnce,
+					},
+				}, isMultiZone),
+				IsWindows:    isWindowsCluster,
+				WinServerVer: winServerVer,
+			},
+		}
+		test := testsuites.DynamicallyProvisionedCmdVolumeTest{
+			CSIDriver: testDriver,
+			Pods:      pods,
+			StorageClassParameters: map[string]string{
+				"skuName":     "PremiumV2_LRS",
+				"cachingmode": "None",
+				"zoned":       "true",
+			},
+		}
+		test.Run(cs, ns)
+	})
+
 	ginkgo.It("should create a pod with volume mount subpath [disk.csi.azure.com] [Windows]", func() {
 		skipIfUsingInTreeVolumePlugin()
 

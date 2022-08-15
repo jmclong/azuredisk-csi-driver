@@ -62,6 +62,7 @@ var (
 	location                  string
 	supportsZRS               bool
 	supportsDynamicResize     bool
+	supportsPremiumV2         bool
 )
 
 type testCmd struct {
@@ -89,11 +90,12 @@ var _ = ginkgo.BeforeSuite(func() {
 	// Default storage driver configuration is CSI. Freshly built
 	// CSI driver is installed for that case.
 	if isTestingMigration || !isUsingInTreeVolumePlugin {
+		ctx := context.Background()
 		creds, err := credentials.CreateAzureCredentialFile()
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		azureClient, err := azure.GetAzureClient(creds.Cloud, creds.SubscriptionID, creds.AADClientID, creds.TenantID, creds.AADClientSecret)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
-		_, err = azureClient.EnsureResourceGroup(context.Background(), creds.ResourceGroup, creds.Location, nil)
+		_, err = azureClient.EnsureResourceGroup(ctx, creds.ResourceGroup, creds.Location, nil)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 		location = creds.Location
@@ -130,6 +132,9 @@ var _ = ginkgo.BeforeSuite(func() {
 				break
 			}
 		}
+
+		supportsPremiumV2, err = azureClient.GetPremiumV2Support(ctx, creds.Location)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 		// Install Azure Disk CSI Driver on cluster from project root
 		e2eBootstrap := testCmd{
@@ -223,7 +228,7 @@ var _ = ginkgo.AfterSuite(func() {
 			startLog: "Uninstalling Azure Disk CSI Driver...",
 			endLog:   "Azure Disk CSI Driver uninstalled",
 		}
-		execTestCmd([]testCmd{azurediskLog, deleteMetricsSVC, e2eTeardown})
+		execTestCmd([]testCmd{deleteMetricsSVC, e2eTeardown, azurediskLog})
 
 		if !isTestingMigration {
 			// install Azure Disk CSI Driver deployment scripts test
@@ -320,6 +325,12 @@ func skipIfNotZRSSupported() {
 func skipIfNotDynamicallyResizeSuported() {
 	if !supportsDynamicResize {
 		ginkgo.Skip("test case not supported on regions without dynamic resize support")
+	}
+}
+
+func skipIfNotSupportPremiumV2() {
+	if !supportsPremiumV2 {
+		ginkgo.Skip("test case not supported in locations that do not support the PremiumV2_LRS disk SKU")
 	}
 }
 
