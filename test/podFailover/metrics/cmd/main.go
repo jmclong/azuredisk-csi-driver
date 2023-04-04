@@ -36,9 +36,16 @@ func main() {
 		Buckets:   prometheus.LinearBuckets(10, 10, 20),
 	}, []string{"testName"})
 
+	podSlowWrites := prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: "default",
+		Name:      "pod_io_disruptions",
+		Help:      "Number of IO disruptions seen by the workload pod after failing",
+		Buckets:   prometheus.LinearBuckets(10, 10, 20),
+	}, []string{"testName"})
+
 	klog.Infof("Registering metrics")
 	r := prometheus.NewRegistry()
-	r.MustRegister(podDowntimeHistogram)
+	r.MustRegister(podDowntimeHistogram, podSlowWrites)
 
 	promMux := http.NewServeMux()
 	promMux.Handle("/metrics", promhttp.HandlerFor(r, promhttp.HandlerOpts{}))
@@ -46,6 +53,12 @@ func main() {
 
 	// Create an http server that listens to the timestamp and logs it
 	podDowntimeMux := http.NewServeMux()
+	podDowntimeMux.HandleFunc("/pod-failover", func(w http.ResponseWriter, r *http.Request) {
+		downtime, _ := strconv.ParseFloat(r.URL.Query().Get("value"), 64)
+		testName := r.URL.Query().Get("testName")
+		klog.Infof("The downtime observed by the logging pod is: %f", downtime)
+		podDowntimeHistogram.WithLabelValues(testName).Observe(downtime)
+	})
 	podDowntimeMux.HandleFunc("/pod-failover", func(w http.ResponseWriter, r *http.Request) {
 		downtime, _ := strconv.ParseFloat(r.URL.Query().Get("value"), 64)
 		testName := r.URL.Query().Get("testName")

@@ -35,6 +35,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
+	e2essh "k8s.io/kubernetes/test/e2e/framework/ssh"
 	podfailure "sigs.k8s.io/azuredisk-csi-driver/test/podFailover/apis/client/clientset/versioned"
 )
 
@@ -45,6 +46,7 @@ const (
 	podFailoverLabelValue  = "pod-failover"
 	sameNodeFailoverConst  = "same-node-failover"
 	deletePodFailoverConst = "delete-pod"
+	killNodeFailoverConst  = "kill-node"
 )
 
 func main() {
@@ -94,15 +96,30 @@ func main() {
 					klog.Errorf("Error occurred while getting same node pods %s: %v", selectedPod.Name, err)
 				}
 				sameNodeFailover(ctx, clientset, podFailoverClient, sameNodePods, failureType)
+			case killNodeFailoverConst:
+				klog.Info("Facilitating kill-node failover.")
+				killNode(ctx, clientset, selectedPod)
 			case deletePodFailoverConst:
-				klog.Info("Facilitating delete-pod failover.")
-				deleteAndRestartPods(ctx, clientset, podFailoverClient, selectedPod, true, failureType)
 			default:
 				klog.Info("Facilitating delete-pod failover.")
 				deleteAndRestartPods(ctx, clientset, podFailoverClient, selectedPod, true, failureType)
 			}
 			time.Sleep(10 * time.Second)
 		}
+	}
+}
+
+func killNode(ctx context.Context, clientset *kubernetes.Clientset, pod v1.Pod) {
+	klog.Infof("Killing node %s", pod.Spec.NodeName)
+	node, err := clientset.CoreV1().Nodes().Get(ctx, pod.Spec.NodeName, metav1.GetOptions{})
+	if err != nil {
+		klog.Errorf("Error occurred while getting node %s: %v", pod.Spec.NodeName, err)
+		return
+	}
+	err = e2essh.IssueSSHCommand("sudo systemctl stop docker kubelet", "skeleton", node)
+	if err != nil {
+		klog.Errorf("Error occurred while killing node %s: %v", pod.Spec.NodeName, err)
+		return
 	}
 }
 

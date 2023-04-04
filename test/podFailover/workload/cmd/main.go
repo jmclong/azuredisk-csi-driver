@@ -29,6 +29,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/Azure/azure-amqp-common-go/v3/aad"
@@ -52,6 +53,7 @@ var workloadType = flag.String("workload-type", "default-workload-type", "The ty
 var driverVersion = flag.String("driver-version", "", "The version of csi-driver")
 var namespace = flag.String("namespace", "pod-failover", "The namespace resources are created in")
 var kubeconfig = flag.String("kubeconfig", "", "kube config path for cluster")
+var writeReportingThreshold = flag.Duration("write-reporting-threshold", 5*time.Second, "Threshold for reporting a slow write to the file mounted on the pod")
 
 type DowntimeMetric struct {
 	TimeStamp     string `json:"timeStamp"`
@@ -161,6 +163,72 @@ func runStatelessWorkload(ctx context.Context, clientset *kubernetes.Clientset, 
 	func() { log.Fatal(srv.ListenAndServe()) }()
 }
 
+func getClient() (*http.Client, error) {
+	client := &http.Client{}
+	if *authEnabled {
+		// Read the values from the secret
+		var caCert = os.Getenv("CA_CERT")
+		var clientCert = os.Getenv("CLIENT_CERT")
+		var clientKey = os.Getenv("CLIENT_KEY")
+
+		caCertPool := x509.NewCertPool()
+		caCertPool.AppendCertsFromPEM([]byte(caCert))
+		cert, err := tls.X509KeyPair([]byte(clientCert), []byte(clientKey))
+
+		if err != nil {
+			klog.Errorf("Error occurred while parsing the certificate %v", err)
+			return nil, err
+		}
+
+		client = &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					RootCAs:      caCertPool,
+					Certificates: []tls.Certificate{cert},
+				},
+			},
+		}
+	}
+	return client, nil
+}
+
+func makeRequestToMetricsServer(ctx context.Context, queryArgs map[string]string) error {
+	if *metricsEndpoint == "" {
+		klog.Infof("Metrics endpoint not set. Skipping the metrics publishing")
+		return nil
+	}
+
+	metricsEndpointURL, err := url.Parse(*metricsEndpoint)
+	if err != nil {
+		klog.Infof("Error occurred while parsing the url %v", *metricsEndpoint)
+		return err
+	}
+
+	client, err := getClient()
+	if err != nil {
+		klog.Infof("Error occurred while getting the client: %v", err)
+		return err
+	}
+
+	//Make a request to the metrics service
+	query := metricsEndpointURL.Query()
+	for key, value := range queryArgs {
+		query.Add(key, value)
+	}
+	metricsEndpointURL.RawQuery = query.Encode()
+
+	resp, err := client.Get(metricsEndpointURL.String())
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+	if err != nil {
+		klog.Infof("Error occurred while making the http call to metrics publisher: %v", err)
+		return err
+	}
+
+	return nil
+}
+
 func reportDowntime(ctx context.Context, clientset *kubernetes.Clientset, downtime int64, failureType string) {
 	klog.Infof("The downtime seen by the pod is %d with type %s", downtime, failureType)
 
@@ -198,59 +266,44 @@ func reportDowntime(ctx context.Context, clientset *kubernetes.Clientset, downti
 		}
 	}
 
-	if *metricsEndpoint != "" {
-		client := &http.Client{}
-		if *authEnabled {
+	queryArgs := map[string]string{
+		"run-id": *runID,
+		"value":  strconv.Itoa(int(downtime)),
+	}
+	err := makeRequestToMetricsServer(ctx, queryArgs)
+	if err != nil {
+		klog.Errorf("Error occurred while making the request to metrics server: %v", err)
+	}
+}
 
-			// Read the values from the secret
-			var caCert = os.Getenv("CA_CERT")
-			var clientCert = os.Getenv("CLIENT_CERT")
-			var clientKey = os.Getenv("CLIENT_KEY")
+func reportReadOnlyFilesystem(file *os.File) {
+	klog.Infof("File write on file: %s failed due to read-only filesystem", file.Name())
+}
 
-			caCertPool := x509.NewCertPool()
-			caCertPool.AppendCertsFromPEM([]byte(caCert))
-			cert, err := tls.X509KeyPair([]byte(clientCert), []byte(clientKey))
-
-			if err != nil {
-				klog.Errorf("Error occurred while parsing the certificate %v", err)
-			}
-
-			client = &http.Client{
-				Transport: &http.Transport{
-					TLSClientConfig: &tls.Config{
-						RootCAs:      caCertPool,
-						Certificates: []tls.Certificate{cert},
-					},
-				},
-			}
+func retryFileWrite(file *os.File) {
+	for {
+		_, err := file.WriteString(strconv.Itoa(int(time.Now().Unix())))
+		if err == nil {
+			return
 		}
-
-		metricsEndpointURL, err := url.Parse(*metricsEndpoint)
-		if err != nil {
-			klog.Infof("Error occurred while parsing the url %v", *metricsEndpoint)
+		if err.(*os.PathError).Err == syscall.EROFS {
+			go reportReadOnlyFilesystem(file)
+			klog.Fatalf("File write on file due to read-only filesystem: %s failed with err: %v", file.Name(), err)
 		}
-
-		//Make a request to the metrics service
-		query := metricsEndpointURL.Query()
-		query.Add("value", strconv.Itoa(int(downtime)))
-		query.Add("run-id", *runID)
-		metricsEndpointURL.RawQuery = query.Encode()
-
-		resp, err := client.Get(metricsEndpointURL.String())
-		if err != nil {
-			klog.Infof("Error occurred while making the http call to metrics publisher: %v", err)
-		}
-		if resp != nil {
-			resp.Body.Close()
-		}
+		klog.Errorf("File write on file: %s failed with err: %v", file.Name(), err)
+		time.Sleep(1 * time.Second)
 	}
 }
 
 func logTimestamp(file *os.File) {
 	for {
-		_, err := file.WriteString(strconv.Itoa(int(time.Now().Unix())))
-		if err != nil {
-			klog.Errorf("File write on file: %s failed with err: %v", file.Name(), err)
+		startTime := time.Now()
+		retryFileWrite(file)
+		endTime := time.Now()
+		diff := endTime.Sub(startTime)
+		klog.Infof("File write on file: %s succeeded with time taken: %v", file.Name(), endTime.Sub(startTime))
+		if diff >= *writeReportingThreshold {
+			go reportSlowWrite(file, diff)
 		}
 		time.Sleep(1 * time.Second)
 	}
